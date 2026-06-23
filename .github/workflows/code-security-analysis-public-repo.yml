@@ -1,4 +1,7 @@
 name: SSDLC Code Security Analysis
+description: |
+  This action runs security analysis tools such as zizmor and semgrep on public repos.
+  It relies on Github Advanced Security to upload scan results.
 
 on:
   workflow_call:
