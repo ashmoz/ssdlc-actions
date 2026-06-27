@@ -39,3 +39,47 @@ jobs:
           min-severity: high
           min-confidence: high
           fail-on-no-inputs: false
+
+  semgrep:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install --no-cache-dir semgrep==1.168.0
+
+      # Run Semgrep CE with the OWASP Top 10, secrets, and general security audit
+      # rulesets. ERROR severity only — high-confidence, exploitable patterns.
+      # `--error` is omitted here: SARIF upload publishes findings to the GHAS
+      # Security tab regardless of exit status, and we don't want to block the
+      # workflow run on findings (the org ruleset enforces blocking, not this job).
+      - name: Run Semgrep (SARIF)
+        run: |
+          semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/security-audit \
+            --severity ERROR \
+            --sarif --output semgrep.sarif \
+            --metrics=off \
+            --disable-version-check \
+            .
+
+      - name: Upload Semgrep SARIF to GitHub code scanning
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@fe4161a26a8629af62121b670040955b330f9af2 # v4.31.6
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep

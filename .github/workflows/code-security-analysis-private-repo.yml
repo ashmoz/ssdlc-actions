@@ -1,5 +1,9 @@
 name: SSDLC Code Security Analysis
-description: Worfklow file for running code security analysis actions on private and internal repos
+description: |
+  Workflow file for running code security analysis actions on private and
+  internal repos. Runs zizmor (GitHub Actions security) and Semgrep CE
+  (application source security). Findings surface as workflow annotations on
+  the PR diff; the job fails when ERROR-severity Semgrep findings are present.
 
 on:
   workflow_call:
@@ -40,3 +44,37 @@ jobs:
           min-severity: high
           min-confidence: high
           fail-on-no-inputs: false
+
+  semgrep:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install --no-cache-dir semgrep==1.168.0
+
+      # No GHAS on private repos — emit findings as workflow annotations on the
+      # diff, and fail the job on ERROR-severity findings so the ruleset blocks
+      # the PR when enforcement is Active. Repo admins can bypass.
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/security-audit \
+            --severity ERROR \
+            --error \
+            --metrics=off \
+            --disable-version-check \
+            .
