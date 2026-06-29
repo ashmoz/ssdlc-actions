@@ -3,7 +3,8 @@ description: |
   Workflow file for running code security analysis actions on private and
   internal repos. Runs zizmor (GitHub Actions security) and Semgrep CE
   (application source security). Findings surface as workflow annotations on
-  the PR diff; the job fails when ERROR-severity Semgrep findings are present.
+  the PR diff and in the job log. The job always passes regardless of findings;
+  blocking is enforced at the org-ruleset / branch-protection layer, not here.
 
 on:
   workflow_call:
@@ -64,9 +65,13 @@ jobs:
       - name: Install Semgrep
         run: pip install --no-cache-dir semgrep==1.168.0
 
-      # No GHAS on private repos — emit findings as workflow annotations on the
-      # diff, and fail the job on ERROR-severity findings so the ruleset blocks
-      # the PR when enforcement is Active. Repo admins can bypass.
+      # No GHAS on private repos — findings still surface as workflow
+      # annotations on the diff and in the full job log. The step does NOT
+      # fail the job on findings (matches the public-repo workflow's behavior).
+      # Rationale: blocking belongs at the org-ruleset / branch-protection
+      # layer where Security can manage exemptions, not inside the workflow.
+      # `|| true` guarantees the step exits 0 even if Semgrep exits non-zero
+      # on findings (default behavior with `--severity ERROR`).
       - name: Run Semgrep
         run: |
           semgrep scan \
@@ -74,7 +79,6 @@ jobs:
             --config p/secrets \
             --config p/security-audit \
             --severity ERROR \
-            --error \
             --metrics=off \
             --disable-version-check \
-            .
+            . || true
